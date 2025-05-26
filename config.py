@@ -1,0 +1,12 @@
+import os
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+EVOLUTION_API_URL = os.getenv("EVOLUTION_API_URL")
+EVOLUTION_INSTANCE_NAME = os.getenv("EVOLUTION_INSTANCE_NAME")
+AUTHENTICATION_API_KEY = os.getenv("AUTHENTICATION_API_KEY")
+
+VECTOR_STORE_PATH = os.getenv("VECTOR_STORE_PATH")
+RAG_FILES_DIR = os.getenv("RAG_FILES_DIR")
