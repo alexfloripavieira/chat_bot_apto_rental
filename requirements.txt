@@ -15,6 +15,7 @@ chromadb==1.0.10
 click==8.2.1
 coloredlogs==15.0.1
 dataclasses-json==0.6.7
+debugpy==1.8.14
 Deprecated==1.2.18
 distro==1.9.0
 durationpy==0.10
@@ -51,6 +52,7 @@ langchain-core==0.3.61
 langchain-openai==0.3.18
 langchain-text-splitters==0.3.8
 langsmith==0.3.42
+logging==0.4.9.6
 markdown-it-py==3.0.0
 marshmallow==3.26.1
 mdurl==0.1.2
@@ -90,6 +92,7 @@ pyproject_hooks==1.2.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.1.0
 PyYAML==6.0.2
+redis==6.1.0
 referencing==0.36.2
 regex==2024.11.6
 requests==2.32.3

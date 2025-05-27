@@ -1,8 +1,18 @@
 from fastapi import FastAPI, Request
+import logging
 
-from evolution_api import send_whatsapp_message
+from chains import get_conversational_rag_chain
+
+from message_buffer import buffer_message
+
+# Configuração do logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 app = FastAPI()
+
+convertional_rag_chain = get_conversational_rag_chain()
 
 
 @app.post("/webhook")
@@ -12,8 +22,8 @@ async def webhook(request: Request):
     message = data.get("data").get("message").get("conversation")
 
     if chat_id and message and "@g.us" not in chat_id:
-        send_whatsapp_message(
-            number=chat_id,
-            text=f"Testando chat bot de whatsapp!\nRecebi isso: {message}",
+        await buffer_message(
+            chat_id=chat_id,
+            message=message,
         )
     return {"status": "ok"}
