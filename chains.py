@@ -7,11 +7,12 @@ from config import OPENAI_MODEL_NAME, OPENAI_MODEL_TEMPERATURE
 from memory import get_session_history
 from prompts import contextualize_prompt, qa_prompt
 from vectorstore import get_vectorstore
+from real_estate_rag import get_real_estate_vectorstore
 
 
 def get_rag_chain():
     llm = ChatOpenAI(model=OPENAI_MODEL_NAME, temperature=OPENAI_MODEL_TEMPERATURE)
-    retriever = get_vectorstore().as_retriever()
+    retriever = get_real_estate_vectorstore().as_retriever()
     history_aware_chain = create_history_aware_retriever(
         llm, retriever, contextualize_prompt
     )
