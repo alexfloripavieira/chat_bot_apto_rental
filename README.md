@@ -92,6 +92,10 @@ http://bot:8000/webhook
 - Habilite o evento `MESSAGES_UPSERT`
 
 ---
+## Atualização automática do vetor de imóveis
+
+O script `real_estate_rag.py` executa a função `refresh_real_estate_vectorstore` em intervalos definidos pela constante `SCRAPE_INTERVAL_SECONDS`. Por padrão, esse valor é `30 * 60`, atualizando o vetor a cada **30 minutos**. Ajuste conforme a necessidade.
+
 
 ### Dúvidas ou melhorias?
 Fique à vontade para abrir issues ou contribuir com o projeto.
