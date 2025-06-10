@@ -14,7 +14,7 @@ from config import (
     REAL_ESTATE_ADMIN_PASSWORD,
 )
 
-SCRAPE_INTERVAL_SECONDS = 30 * 60  # 30 minutos
+SCRAPE_INTERVAL_SECONDS = 30 * 60  # 30 minutos (1800 segundos)
 
 def log(*args):
     print('[RAG]', *args)
