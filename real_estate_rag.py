@@ -1,53 +1,97 @@
 import threading
+from urllib.parse import urljoin
+
 import requests
 from bs4 import BeautifulSoup
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
-from config import VECTOR_STORE_PATH
+from config import (
+    VECTOR_STORE_PATH,
+    REAL_ESTATE_ADMIN_URL,
+    REAL_ESTATE_ADMIN_USERNAME,
+    REAL_ESTATE_ADMIN_PASSWORD,
+)
 
-SCRAPE_INTERVAL_SECONDS = 30  # 30 minutos
+SCRAPE_INTERVAL_SECONDS = 30 * 60  # 30 minutos
 
 def log(*args):
     print('[RAG]', *args)
 
-def scrape_real_estate_site():
-    url = "https://www.robsonvieira.com.br/imoveis"
-    response = requests.get(url)
-    soup = BeautifulSoup(response.text, "html.parser")
+def login_admin(session: requests.Session) -> bool:
+    """Realiza login no painel administrativo."""
+    if not all(
+        [REAL_ESTATE_ADMIN_URL, REAL_ESTATE_ADMIN_USERNAME, REAL_ESTATE_ADMIN_PASSWORD]
+    ):
+        log("Variáveis de ambiente para login não configuradas. Pulando scraping.")
+        return False
 
-    # Seleciona as linhas da tabela que contêm os dados dos imóveis
-    property_rows = soup.select("div#main table tr.altrow")
-    log(f"Encontradas {len(property_rows)} linhas de imóveis.")
+    login_url = urljoin(REAL_ESTATE_ADMIN_URL, "login")
+    data = {
+        "username": REAL_ESTATE_ADMIN_USERNAME,
+        "password": REAL_ESTATE_ADMIN_PASSWORD,
+    }
+
+    try:
+        response = session.post(login_url, data=data)
+        response.raise_for_status()
+        log("Login realizado com sucesso no painel de imóveis")
+        return True
+    except Exception as e:
+        log(f"Falha ao realizar login: {e}")
+        return False
+
+
+def scrape_real_estate_site():
+    """Faz scraping do painel admin e retorna os imóveis disponíveis."""
+    session = requests.Session()
+    if not login_admin(session):
+        return []
+
+    try:
+        response = session.get(REAL_ESTATE_ADMIN_URL)
+        response.raise_for_status()
+    except Exception as e:
+        log(f"Erro ao acessar página inicial: {e}")
+        return []
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    tab_links = [urljoin(REAL_ESTATE_ADMIN_URL, a["href"]) for a in soup.find_all("a", href=True) if "apto" in a["href"]]
 
     documents = []
-    for row in property_rows:
-        # Extrai os dados de cada célula da linha
-        cells = row.find_all("td")
-        if len(cells) >= 5:  # Certifica-se de que há pelo menos 5 colunas
-            location = cells[0].get_text(strip=True)
-            number = cells[1].get_text(strip=True)
-            floor = cells[2].get_text(strip=True)
-            price = cells[3].get_text(strip=True)
-            furnished = cells[4].get_text(strip=True)
+    for link in tab_links:
+        try:
+            page = session.get(link)
+            page.raise_for_status()
+        except Exception as e:
+            log(f"Falha ao acessar {link}: {e}")
+            continue
 
-            # Monta o conteúdo do documento
-            content = "\n".join(
-                filter(None, [
-                    f"Localização: {location}",
-                    f"Número: {number}",
-                    f"Andar: {floor}",
-                    f"Valor: {price}",
-                    f"Mobiliado: {furnished}",
-                ])
-            )
+        page_soup = BeautifulSoup(page.text, "html.parser")
+        rows = page_soup.find_all("tr")
+        log(f"[{link}] {len(rows)} linhas encontradas")
 
-            # Adiciona o documento à lista
+        for row in rows:
+            cells = row.find_all("td")
+            if not cells:
+                continue
+
+            # Verifica coluna de disponibilidade
+            row_text = " ".join(cell.get_text(" ", strip=True).lower() for cell in cells)
+            available = any(word in row_text for word in ["disponivel", "available", "sim", "yes", "true", "ativo"])
+            if not available:
+                continue
+
+            details = [cell.get_text(" ", strip=True) for cell in cells]
+            img = row.find("img")
+            if img and img.get("src"):
+                details.append(f"Foto: {img.get('src')}")
+
+            content = "\n".join(filter(None, details))
             documents.append(Document(page_content=content))
 
-    log(f"documents {documents}")
-
+    log(f"{len(documents)} documentos coletados do painel")
     return documents
 
 
