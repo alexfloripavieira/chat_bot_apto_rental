@@ -1,6 +1,6 @@
 .env
 venv
 .venv
-vectorstore_data
+vectorstore/
 __pycache__/
 .DS_store
