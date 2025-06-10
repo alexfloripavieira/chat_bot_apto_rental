@@ -33,6 +33,13 @@ Edite o `.env` e adicione os seguintes valores:
 - `AUTHENTICATION_API_KEY` (chave de autenticação da EvolutionAPI)
 - `EVOLUTION_INSTANCE_NAME` (nome da instância no EvolutionAPI)
 
+Para que o RAG busque as informações corretas dos apartamentos no painel
+administrativo, também configure:
+
+- `REAL_ESTATE_ADMIN_URL` (URL do painel)
+- `REAL_ESTATE_ADMIN_USERNAME` (usuário de login)
+- `REAL_ESTATE_ADMIN_PASSWORD` (senha de login)
+
 ⚠️ O valor de `EVOLUTION_INSTANCE_NAME` deve ser exatamente o mesmo nome da instância que será criada no painel da EvolutionAPI em:
 
 [http://localhost:8080/manager](http://localhost:8080/manager)
