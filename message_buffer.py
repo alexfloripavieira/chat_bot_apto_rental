@@ -42,10 +42,11 @@ async def handle_debounce(chat_id: str):
         full_message = ' '.join(messages).strip()
         if full_message:
             log(f'Enviando mensagem agrupada para {chat_id}: {full_message}')
-            ai_response = conversational_rag_chain.invoke(
+            ai_result = await conversational_rag_chain.ainvoke(
                 input={'input': full_message},
                 config={'configurable': {'session_id': chat_id}},
-            )['answer']
+            )
+            ai_response = ai_result['answer']
 
             send_whatsapp_message(
                 number=chat_id,
