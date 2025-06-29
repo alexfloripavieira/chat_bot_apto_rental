@@ -4,7 +4,9 @@ uvicorn
 requests
 beautifulsoup4
 langchain
+langchain-community
 langchain-openai
+langchain-chroma
 chromadb
 pandas
 apscheduler
