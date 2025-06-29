@@ -1,50 +1,39 @@
-import threading
+import logging
 from urllib.parse import urljoin
-
 import requests
 from bs4 import BeautifulSoup
 from langchain_core.documents import Document
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_openai import OpenAIEmbeddings
-from langchain_chroma import Chroma
-from config import (
-    VECTOR_STORE_PATH,
+
+from config (
     REAL_ESTATE_ADMIN_URL,
     REAL_ESTATE_ADMIN_USERNAME,
     REAL_ESTATE_ADMIN_PASSWORD,
 )
+from vectorstore import rebuild_vectorstore, load_and_process_local_files, get_vectorstore
 
-SCRAPE_INTERVAL_SECONDS = 30 * 60  # 30 minutos (1800 segundos)
-
-def log(*args):
-    print('[RAG]', *args)
+# Configuração do logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 def login_admin(session: requests.Session) -> bool:
     """Realiza login no painel administrativo."""
-    if not all(
-        [REAL_ESTATE_ADMIN_URL, REAL_ESTATE_ADMIN_USERNAME, REAL_ESTATE_ADMIN_PASSWORD]
-    ):
-        log("Variáveis de ambiente para login não configuradas. Pulando scraping.")
+    if not all([REAL_ESTATE_ADMIN_URL, REAL_ESTATE_ADMIN_USERNAME, REAL_ESTATE_ADMIN_PASSWORD]):
+        logging.warning("Variáveis de ambiente para login não configuradas. Pulando scraping.")
         return False
 
     login_url = urljoin(REAL_ESTATE_ADMIN_URL, "login")
-    data = {
-        "username": REAL_ESTATE_ADMIN_USERNAME,
-        "password": REAL_ESTATE_ADMIN_PASSWORD,
-    }
+    data = {"username": REAL_ESTATE_ADMIN_USERNAME, "password": REAL_ESTATE_ADMIN_PASSWORD}
 
     try:
         response = session.post(login_url, data=data)
         response.raise_for_status()
-        log("Login realizado com sucesso no painel de imóveis")
+        logging.info("Login realizado com sucesso no painel de imóveis")
         return True
-    except Exception as e:
-        log(f"Falha ao realizar login: {e}")
+    except requests.RequestException as e:
+        logging.error(f"Falha ao realizar login: {e}")
         return False
 
-
-def scrape_real_estate_site():
-    """Faz scraping do painel admin e retorna os imóveis disponíveis."""
+def scrape_real_estate_site() -> list[Document]:
+    """Faz scraping do painel admin e retorna os imóveis disponíveis como Documentos."""
     session = requests.Session()
     if not login_admin(session):
         return []
@@ -52,111 +41,90 @@ def scrape_real_estate_site():
     try:
         response = session.get(REAL_ESTATE_ADMIN_URL)
         response.raise_for_status()
-    except Exception as e:
-        log(f"Erro ao acessar página inicial: {e}")
+    except requests.RequestException as e:
+        logging.error(f"Erro ao acessar página inicial do admin: {e}")
         return []
 
     soup = BeautifulSoup(response.text, "html.parser")
+    # Encontra todos os links que contêm 'apto' para navegar para as páginas de apartamentos
     tab_links = [urljoin(REAL_ESTATE_ADMIN_URL, a["href"]) for a in soup.find_all("a", href=True) if "apto" in a["href"]]
 
     documents = []
     for link in tab_links:
         try:
-            page = session.get(link)
-            page.raise_for_status()
-        except Exception as e:
-            log(f"Falha ao acessar {link}: {e}")
+            page_response = session.get(link)
+            page_response.raise_for_status()
+        except requests.RequestException as e:
+            logging.error(f"Falha ao acessar a página de apartamentos {link}: {e}")
             continue
 
-        page_soup = BeautifulSoup(page.text, "html.parser")
+        page_soup = BeautifulSoup(page_response.text, "html.parser")
         rows = page_soup.find_all("tr")
-        log(f"[{link}] {len(rows)} linhas encontradas")
+        logging.info(f"Analisando {len(rows)} imóveis em {link}")
 
         for row in rows:
             cells = row.find_all("td")
             if not cells:
                 continue
 
-            # Verifica coluna de disponibilidade
+            # Heurística para verificar se o imóvel está disponível
             row_text = " ".join(cell.get_text(" ", strip=True).lower() for cell in cells)
-            available = any(word in row_text for word in ["disponivel", "available", "sim", "yes", "true", "ativo"])
-            if not available:
+            is_available = any(word in row_text for word in ["disponivel", "available", "sim", "yes", "true", "ativo"])
+            
+            if not is_available:
                 continue
 
             details = [cell.get_text(" ", strip=True) for cell in cells]
-            img = row.find("img")
-            if img and img.get("src"):
-                details.append(f"Foto: {img.get('src')}")
+            img_tag = row.find("img")
+            if img_tag and img_tag.get("src"):
+                details.append(f"Foto: {img_tag.get('src')}")
 
+            # Cria um Documento para cada imóvel disponível
             content = "\n".join(filter(None, details))
-            documents.append(Document(page_content=content))
+            # Adiciona metadados para futura identificação
+            metadata = {"source": "real_estate_scrape", "url": link}
+            documents.append(Document(page_content=content, metadata=metadata))
 
-    log(f"{len(documents)} documentos coletados do painel")
+    logging.info(f"{len(documents)} imóveis disponíveis coletados do painel.")
     return documents
 
-
-def get_real_estate_vectorstore():
-    documents = scrape_real_estate_site()
-
-    if not documents:
-        return Chroma(
-            persist_directory=VECTOR_STORE_PATH,
-            embedding_function=OpenAIEmbeddings()
-        )
-
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-    chunks = splitter.split_documents(documents)
-
-    return Chroma.from_documents(
-        documents=chunks,
-        embedding=OpenAIEmbeddings(),
-        persist_directory=VECTOR_STORE_PATH,
-    )
-
-
-def refresh_real_estate_vectorstore():
-    print("[INFO] Atualizando vetor de imóveis...")
-    documents = scrape_real_estate_site()
-
-    if documents:
-        splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-        chunks = splitter.split_documents(documents)
-
-        # recria o vetor sobrescrevendo o anterior
-        Chroma.from_documents(
-            documents=chunks,
-            embedding=OpenAIEmbeddings(),
-            persist_directory=VECTOR_STORE_PATH,
-        )
-        print(f"[INFO] Vetor de imóveis atualizado com {len(chunks)} documentos.")
+def refresh_knowledge_base():
+    """
+    Job completo de atualização da base de conhecimento.
+    1. Faz o scraping dos imóveis.
+    2. Reconstrói a vectorstore com os dados do scraping (para remover imóveis antigos).
+    3. Carrega e adiciona quaisquer novos arquivos locais (PDFs, TXTs).
+    """
+    logging.info("Iniciando job de atualização da base de conhecimento...")
+    
+    # Passo 1: Scraping
+    scraped_docs = scrape_real_estate_site()
+    
+    # Passo 2: Recria a base com os dados do scraping
+    if scraped_docs:
+        rebuild_vectorstore(scraped_docs)
     else:
-        print("[WARN] Nenhum imóvel encontrado para atualizar vetor.")
+        logging.warning("Nenhum documento retornado do scraping. A base de conhecimento de imóveis pode estar vazia.")
 
-    # agenda a próxima atualização
-    threading.Timer(SCRAPE_INTERVAL_SECONDS, refresh_real_estate_vectorstore).start()
+    # Passo 3: Adiciona arquivos locais
+    # Isso garante que os arquivos PDF/TXT sejam adicionados após a reconstrução.
+    load_and_process_local_files()
+    
+    logging.info("Job de atualização da base de conhecimento concluído.")
 
-
-def start_real_estate_scheduler():
-    print("[INFO] Iniciando atualização automática do RAG de imóveis...")
-    refresh_real_estate_vectorstore()
-
-def verify_real_estate_vectorstore():
+def verify_vectorstore_content():
+    """
+    Função de depuração para verificar o conteúdo atual da vectorstore.
+    """
     try:
-        # Carrega o vetor de armazenamento existente
-        vectorstore = Chroma(
-            persist_directory=VECTOR_STORE_PATH,
-            embedding_function=OpenAIEmbeddings()
-        )
+        vectorstore = get_vectorstore()
+        retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
+        docs = retriever.get_relevant_documents("quais são os imóveis disponíveis?")
 
-        # Recupera os documentos armazenados
-        retriever = vectorstore.as_retriever()
-        docs = retriever.get_relevant_documents("imóveis disponíveis")
-
-        print(f"[INFO] Total de documentos armazenados: {len(docs)}")
+        logging.info(f"[VERIFICAÇÃO] Total de documentos recuperados: {len(docs)}")
         for i, doc in enumerate(docs, start=1):
-            print(f"[Document {i}]")
-            print(doc.page_content)
-            print("-" * 50)
+            logging.info(f"[Documento {i}] Conteúdo: {doc.page_content[:300]}... | Metadados: {doc.metadata}")
+        logging.info("-" * 50)
 
     except Exception as e:
-        print(f"[ERROR] Falha ao verificar o vetor de armazenamento: {e}")
+        logging.error(f"[VERIFICAÇÃO] Falha ao verificar a vectorstore: {e}")
