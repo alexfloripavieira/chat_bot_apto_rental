@@ -1,5 +1,6 @@
 
 import logging
+from urllib.parse import urljoin
 import requests
 from bs4 import BeautifulSoup
 from langchain_core.documents import Document
@@ -27,33 +28,51 @@ def scrape_public_real_estate_site() -> list[Document]:
     soup = BeautifulSoup(response.content, 'html.parser')
     documents = []
 
-    # --- ÁREA DE CUSTOMIZAÇÃO --- 
-    # Você PRECISA ajustar estes seletores para o site alvo.
-    # Exemplo genérico:
-    listings = soup.find_all('div', class_='imovel-card') # Mude 'div' e 'imovel-card'
-    logging.info(f"Encontrados {len(listings)} anúncios de imóveis no site.")
+    # Encontra a tabela principal que contém os imóveis
+    table = soup.find('table')
+    if not table:
+        logging.warning("Nenhuma tabela de imóveis encontrada no site.")
+        return []
 
-    for apt in listings:
+    # Pega todas as linhas do corpo da tabela, ignorando o cabeçalho e rodapé
+    rows = table.find('tbody').find_all('tr')
+    logging.info(f"Encontradas {len(rows)} linhas de imóveis na tabela.")
+
+    for row in rows:
+        # Pega todas as células da linha
+        cells = row.find_all('td')
+        if len(cells) < 6:  # Garante que a linha tem todas as colunas esperadas
+            continue
+
         try:
-            # Extraia os dados. Mude os seletores conforme necessário.
-            title = apt.find('h2', class_='imovel-titulo').text.strip()
-            address = apt.find('p', class_='imovel-endereco').text.strip()
-            price = apt.find('p', class_='imovel-preco').text.strip()
-            link_tag = apt.find('a')
-            link = link_tag['href'] if link_tag else "Link não encontrado"
+            # Extrai os dados de cada célula pela ordem
+            local = cells[0].text.strip()
+            numero = cells[1].text.strip()
+            andar = cells[2].text.strip()
+            valor = cells[3].text.strip()
+            mobiliado = cells[4].text.strip()
+            
+            # Encontra o link na última célula
+            link_tag = cells[5].find('a')
+            if link_tag and link_tag.get('href'):
+                # Constrói a URL completa do link
+                relative_link = link_tag['href']
+                full_link = urljoin(WEB_PAGE_URL, relative_link)
+            else:
+                full_link = "Link não disponível"
 
-            # Monta uma descrição para ser usada pelo LLM
+            # Monta uma descrição clara para ser usada pelo LLM
             content = (
-                f"Imóvel: {title}. "
-                f"Localização: {address}. "
-                f"Preço: {price}. "
-                f"Link para mais detalhes: {link}"
+                f"Imóvel disponível no {local}, número {numero} ({andar}).\n"
+                f"Valor do aluguel: {valor}.\n"
+                f"Mobiliado: {mobiliado}.\n"
+                f"Para mais detalhes, acesse o link."
             )
             
-            metadata = {"source": "web_scrape", "url": link}
+            metadata = {"source": "web_scrape", "url": full_link, "local": local}
             documents.append(Document(page_content=content, metadata=metadata))
-        except AttributeError as e:
-            logging.warning(f"Não foi possível extrair todos os dados de um anúncio. Erro: {e}")
+        except IndexError as e:
+            logging.warning(f"Não foi possível extrair dados de uma linha da tabela. Erro: {e}")
             continue
             
     logging.info(f"{len(documents)} imóveis coletados do site público.")
