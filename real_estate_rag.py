@@ -39,11 +39,7 @@ def scrape_public_real_estate_site() -> list[Document]:
         return []
 
     # Pega todas as linhas do corpo da tabela, ignorando o cabeçalho e rodapé
-    tbody = table.find('tbody')
-    if not tbody:
-        logging.warning("Nenhum tbody encontrado dentro da tabela de imóveis.")
-        return []
-    rows = tbody.find_all('tr')
+    rows = table.find_all('tr')
     logging.info(f"Encontradas {len(rows)} linhas de imóveis na tabela.")
 
     for row in rows:
