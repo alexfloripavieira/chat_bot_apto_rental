@@ -28,7 +28,12 @@ def scrape_public_real_estate_site() -> list[Document]:
     documents = []
 
     # Encontra a tabela principal que contém os imóveis
-    table = soup.find('table')
+    main_div = soup.find('div', id='main')
+    if not main_div:
+        logging.warning("Div com id='main' não encontrada no site.")
+        return []
+
+    table = main_div.find('table')
     if not table:
         logging.warning("Nenhuma tabela de imóveis encontrada no site.")
         return []
