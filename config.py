@@ -1,3 +1,4 @@
+
 import os
 from dotenv import load_dotenv
 
@@ -35,3 +36,4 @@ WEB_PAGE_URL = os.getenv("WEB_PAGE_URL")
 REAL_ESTATE_ADMIN_URL = os.getenv("REAL_ESTATE_ADMIN_URL")
 REAL_ESTATE_ADMIN_USERNAME = os.getenv("REAL_ESTATE_ADMIN_USERNAME")
 REAL_ESTATE_ADMIN_PASSWORD = os.getenv("REAL_ESTATE_ADMIN_PASSWORD")
+

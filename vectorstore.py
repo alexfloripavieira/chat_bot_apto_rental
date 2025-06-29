@@ -1,4 +1,3 @@
-
 import os
 import shutil
 import logging
@@ -101,4 +100,3 @@ def rebuild_vectorstore(documents: list[Document]):
 
     logging.info(f"Vectorstore antiga removida. Reconstruindo com {len(documents)} novos documentos.")
     add_documents_to_vectorstore(documents)
-

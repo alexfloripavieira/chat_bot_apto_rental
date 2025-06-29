@@ -1,3 +1,4 @@
+
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
@@ -85,3 +86,4 @@ async def verify_vectorstore_endpoint():
     logging.info("Verificação manual da vectorstore acionada via endpoint.")
     verify_vectorstore_content()
     return {"status": "ok", "message": "Verificação concluída. Veja os logs do servidor para detalhes."}
+

@@ -1,4 +1,4 @@
-from config import REDIS_URL
+from config import CACHE_REDIS_URI as REDIS_URL
 from langchain_community.chat_message_histories import RedisChatMessageHistory
 
 
